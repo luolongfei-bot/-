@@ -126,7 +126,9 @@ async function fetchFromCloud() {
         if (currentCloudConfig.type === 'jsonbin') {
             const res = await fetch(`https://api.jsonbin.io/v3/b/${currentCloudConfig.binId}/latest`, {
                 headers: {
-                    'X-Master-Key': currentCloudConfig.apiKey
+                    'X-Master-Key': currentCloudConfig.apiKey,
+                    'X-Access-Key': currentCloudConfig.apiKey,
+                    'Cache-Control': 'no-cache'
                 }
             });
             if (!res.ok) throw new Error('JSONBin Error');
@@ -153,7 +155,9 @@ async function saveToCloud(dataToSave) {
                 method: 'PUT',
                 headers: {
                     'Content-Type': 'application/json',
-                    'X-Master-Key': currentCloudConfig.apiKey
+                    'X-Master-Key': currentCloudConfig.apiKey,
+                    'X-Access-Key': currentCloudConfig.apiKey,
+                    'Cache-Control': 'no-cache'
                 },
                 body: JSON.stringify(dataToSave)
             });

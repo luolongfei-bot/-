@@ -427,6 +427,22 @@ async function saveData() {
         } else {
             updateConnectionStatus();
         }
+    } else if (useServer) {
+        try {
+            await fetch(LOCAL_API_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data)
+            });
+            updateConnectionStatus(); // Update status/icon to show synced?
+        } catch (e) {
+            console.error("Failed to save to server", e);
+            const statusEl = document.getElementById('connectionStatus');
+            if (statusEl) statusEl.textContent = '⚠️ 同步失败 (保存于本地)';
+        }
+    }
+    render();
+}
 
 async function fetchServerDataset() {
     if (currentCloudConfig) {
@@ -457,38 +473,6 @@ async function syncFromServer(silent = false) {
         alert('未连接任何服务器或服务器无数据');
     }
     return false;
-}
-
-async function fetchServerDataset() {
-    if (currentCloudConfig) {
-        return await fetchFromCloud();
-    } else if (useServer) {
-        try {
-            const res = await fetch(LOCAL_API_URL);
-            if (res.ok) {
-                return await res.json();
-            }
-        } catch (e) {
-            console.error("Local server fetch error", e);
-        }
-    }
-    return null;
-}
-    } else if (useServer) {
-        try {
-            await fetch(LOCAL_API_URL, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(data)
-            });
-            updateConnectionStatus(); // Update status/icon to show synced?
-        } catch (e) {
-            console.error("Failed to save to server", e);
-            const statusEl = document.getElementById('connectionStatus');
-            if (statusEl) statusEl.textContent = '⚠️ 同步失败 (保存于本地)';
-        }
-    }
-    render();
 }
 
 function getTodayString() {

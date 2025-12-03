@@ -68,6 +68,13 @@ const DEFAULT_CLOUD_CONFIG = {
 let useServer = false;
 let currentCloudConfig = null; // { type: 'jsonbin', binId, apiKey } or { type: 'custom', url }
 
+function isDefaultDataset(dataset) {
+    if (!dataset) return true;
+    const hasTasks = dataset.tasks && dataset.tasks.length > 0;
+    const meaningfulName = dataset.project && dataset.project.name && !["演示大事件", "未命名项目", "Project Flow"].includes(dataset.project.name);
+    return !(hasTasks || meaningfulName);
+}
+
 // Load Cloud Config from LocalStorage (fallback to default so that first-time users也能直接使用服务器数据)
 try {
     const savedConfig = localStorage.getItem('cloud-config');
@@ -1320,6 +1327,15 @@ window.onclick = (e) => {
 // Init
 document.addEventListener('DOMContentLoaded', async () => {
     await loadData();
+    
+    // Double-check: if我们处于云端模式但当前数据仍是示例/空数据，再尝试一次云端拉取
+    if (currentCloudConfig && isDefaultDataset(data)) {
+        const cloudData = await fetchFromCloud();
+        if (cloudData) {
+            data = cloudData;
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+        }
+    }
     
     // Wire up Force Sync Button if connected
     const syncBtn = document.getElementById('forceSyncBtn');

@@ -1428,25 +1428,25 @@ document.addEventListener('DOMContentLoaded', async () => {
         const saveCloudBtn = document.getElementById('saveCloudBtn');
         if (saveCloudBtn) {
             saveCloudBtn.addEventListener('click', async () => {
-            const type = document.getElementById('cloudServiceType').value;
-            let newConfig = { type };
-            
-            if (type === 'jsonbin') {
-                newConfig.binId = document.getElementById('cloudBinId').value.trim();
-                newConfig.apiKey = document.getElementById('cloudApiKey').value.trim();
-            } else {
-                newConfig.url = document.getElementById('cloudCustomUrl').value.trim();
-            }
+                const type = document.getElementById('cloudServiceType').value;
+                let newConfig = { type };
+                
+                if (type === 'jsonbin') {
+                    newConfig.binId = document.getElementById('cloudBinId').value.trim();
+                    newConfig.apiKey = document.getElementById('cloudApiKey').value.trim();
+                } else {
+                    newConfig.url = document.getElementById('cloudCustomUrl').value.trim();
+                }
 
-            currentCloudConfig = ensureCloudConfig(newConfig);
-            localStorage.setItem('cloud-config', JSON.stringify(currentCloudConfig));
-            
-            // Reload data with new config
-            await loadData();
-            render();
-            
-            cloudModal.style.display = 'none';
-            alert('已切换到云端模式！');
+                currentCloudConfig = ensureCloudConfig(newConfig);
+                localStorage.setItem('cloud-config', JSON.stringify(currentCloudConfig));
+                
+                // Reload data with new config
+                await loadData();
+                render();
+                
+                cloudModal.style.display = 'none';
+                alert('已切换到云端模式！');
             });
         }
     }

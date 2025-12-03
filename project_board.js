@@ -178,17 +178,7 @@ async function saveToCloud(dataToSave) {
 
 function updateConnectionStatus() {
     let statusEl = document.getElementById('connectionStatus');
-    if (!statusEl) {
-        const header = document.querySelector('.header-left');
-        statusEl = document.createElement('div');
-        statusEl.id = 'connectionStatus';
-        statusEl.className = 'status-badge';
-        statusEl.style.marginLeft = '15px';
-        statusEl.style.fontSize = '0.9rem';
-        statusEl.style.padding = '4px 8px';
-        statusEl.style.borderRadius = '4px';
-        header.appendChild(statusEl);
-    }
+    if (!statusEl) return;
 
     if (currentCloudConfig) {
         statusEl.textContent = '☁️ 已连接云端 (互联网模式)';

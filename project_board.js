@@ -55,6 +55,12 @@ let ganttInstance = null;
 let ganttMode = 'Day';
 
 // --- Cloud Sync Logic (JSONBin & Custom) ---
+function isDefaultDataset(dataset) {
+    if (!dataset) return true;
+    const hasTasks = dataset.tasks && dataset.tasks.length > 0;
+    const meaningfulName = dataset.project && dataset.project.name && !["演示大事件", "未命名项目", "Project Flow"].includes(dataset.project.name);
+    return !(hasTasks || meaningfulName);
+}
 const SERVER_BASE = window.location.protocol === 'file:' ? 'http://localhost:8000' : '';
 const LOCAL_API_URL = `${SERVER_BASE}/api/data`;
 const LOCAL_HEALTH_URL = `${SERVER_BASE}/api/health`;
@@ -67,13 +73,6 @@ const DEFAULT_CLOUD_CONFIG = {
 
 let useServer = false;
 let currentCloudConfig = null; // { type: 'jsonbin', binId, apiKey } or { type: 'custom', url }
-
-function isDefaultDataset(dataset) {
-    if (!dataset) return true;
-    const hasTasks = dataset.tasks && dataset.tasks.length > 0;
-    const meaningfulName = dataset.project && dataset.project.name && !["演示大事件", "未命名项目", "Project Flow"].includes(dataset.project.name);
-    return !(hasTasks || meaningfulName);
-}
 
 // Load Cloud Config from LocalStorage (fallback to default so that first-time users也能直接使用服务器数据)
 try {

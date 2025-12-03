@@ -59,24 +59,27 @@ const SERVER_BASE = window.location.protocol === 'file:' ? 'http://localhost:800
 const LOCAL_API_URL = `${SERVER_BASE}/api/data`;
 const LOCAL_HEALTH_URL = `${SERVER_BASE}/api/health`;
 
+const DEFAULT_CLOUD_CONFIG = {
+    type: 'jsonbin',
+    binId: '692ff62eae596e708f804387',
+    apiKey: '$2a$10$6XjqsiDTFWsfHa5EnTtgWuuLPhUikpZ.P4y3qIWyDS69ajtAcfJWO'
+};
+
 let useServer = false;
 let currentCloudConfig = null; // { type: 'jsonbin', binId, apiKey } or { type: 'custom', url }
 
-// Load Cloud Config from LocalStorage
+// Load Cloud Config from LocalStorage (fallback to default so that first-time users也能直接使用服务器数据)
 try {
     const savedConfig = localStorage.getItem('cloud-config');
     if (savedConfig) {
         currentCloudConfig = JSON.parse(savedConfig);
     } else {
-        // Auto-configure with provided credentials
-        currentCloudConfig = {
-            type: 'jsonbin',
-            binId: '692ff62eae596e708f804387',
-            apiKey: '$2a$10$6XjqsiDTFWsfHa5EnTtgWuuLPhUikpZ.P4y3qIWyDS69ajtAcfJWO'
-        };
+        currentCloudConfig = { ...DEFAULT_CLOUD_CONFIG };
         localStorage.setItem('cloud-config', JSON.stringify(currentCloudConfig));
     }
-} catch(e) {}
+} catch(e) {
+    currentCloudConfig = { ...DEFAULT_CLOUD_CONFIG };
+}
 
 async function checkServer() {
     // 1. Check Cloud First
@@ -1306,7 +1309,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     
     // Wire up Force Sync Button if connected
     const syncBtn = document.getElementById('forceSyncBtn');
-    if (useServer && syncBtn) {
+    if ((currentCloudConfig || useServer) && syncBtn) {
         syncBtn.style.display = 'inline-block';
     } else if (syncBtn) {
         syncBtn.style.display = 'none';

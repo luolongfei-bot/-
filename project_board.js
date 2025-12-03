@@ -515,8 +515,10 @@ function checkDependencies(task) {
 
 // --- View Switching ---
 
-document.getElementById('viewBoardBtn').addEventListener('click', () => switchView('board'));
-document.getElementById('viewGanttBtn').addEventListener('click', () => switchView('gantt'));
+const viewBoardBtn = document.getElementById('viewBoardBtn');
+if (viewBoardBtn) viewBoardBtn.addEventListener('click', () => switchView('board'));
+const viewGanttBtn = document.getElementById('viewGanttBtn');
+if (viewGanttBtn) viewGanttBtn.addEventListener('click', () => switchView('gantt'));
 
 function switchView(view) {
     currentView = view;

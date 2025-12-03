@@ -220,20 +220,34 @@ async function loadData() {
     // Check if server data is effectively "empty/default"
     // The Python server initializes with "未命名项目" and empty tasks.
     const isServerDefault = serverData && 
+                            !currentCloudConfig && // 仅针对本地服务器判断默认数据
                             serverData.project.name === "未命名项目" && 
                             (!serverData.tasks || serverData.tasks.length === 0);
 
-    if ((currentCloudConfig || useServer) && serverData && !isServerDefault) {
-        // Server has REAL data -> Use it (standard collaboration flow)
+    if (currentCloudConfig) {
+        if (serverData) {
+            data = serverData;
+            console.log("Loaded data from Cloud");
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+            return;
+        } else {
+            console.warn("Cloud data unavailable, fallback to local cache if exists.");
+            if (localData) {
+                data = localData;
+                return;
+            }
+        }
+    } else if (useServer && serverData && !isServerDefault) {
+        // Local server has data -> use it
         data = serverData;
-        console.log("Loaded data from Server/Cloud");
+        console.log("Loaded data from Server");
         localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
         return;
-    } else if ((currentCloudConfig || useServer) && localIsReal) {
-        // Server is empty/default, but we have local data -> Use Local & SYNC TO SERVER
+    } else if (useServer && localIsReal) {
+        // Local server empty/default, push cached data
         data = localData;
-        console.log("Loaded local data, pushing to server...");
-        saveData(); // This pushes to server because useServer is true
+        console.log("Loaded local data, pushing to local server...");
+        saveData();
         return;
     }
 

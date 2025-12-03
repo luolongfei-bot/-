@@ -73,19 +73,33 @@ const DEFAULT_CLOUD_CONFIG = {
 
 let useServer = false;
 let currentCloudConfig = null; // { type: 'jsonbin', binId, apiKey } or { type: 'custom', url }
+let initialServerSyncDone = false;
 
-// Load Cloud Config from LocalStorage (fallback to default so that first-time users也能直接使用服务器数据)
-try {
-    const savedConfig = localStorage.getItem('cloud-config');
-    if (savedConfig) {
-        currentCloudConfig = JSON.parse(savedConfig);
-    } else {
-        currentCloudConfig = { ...DEFAULT_CLOUD_CONFIG };
-        localStorage.setItem('cloud-config', JSON.stringify(currentCloudConfig));
+function ensureCloudConfig(config) {
+    if (!config || typeof config !== 'object') return { ...DEFAULT_CLOUD_CONFIG };
+    const merged = { ...DEFAULT_CLOUD_CONFIG, ...config };
+    if (!merged.binId || !merged.apiKey) {
+        merged.binId = DEFAULT_CLOUD_CONFIG.binId;
+        merged.apiKey = DEFAULT_CLOUD_CONFIG.apiKey;
     }
-} catch(e) {
-    currentCloudConfig = { ...DEFAULT_CLOUD_CONFIG };
+    return merged;
 }
+
+function loadCloudConfig() {
+    try {
+        const savedConfig = localStorage.getItem('cloud-config');
+        if (savedConfig) {
+            currentCloudConfig = ensureCloudConfig(JSON.parse(savedConfig));
+        } else {
+            currentCloudConfig = { ...DEFAULT_CLOUD_CONFIG };
+            localStorage.setItem('cloud-config', JSON.stringify(currentCloudConfig));
+        }
+    } catch (e) {
+        currentCloudConfig = { ...DEFAULT_CLOUD_CONFIG };
+    }
+}
+
+loadCloudConfig();
 
 async function checkServer() {
     // 1. Check Cloud First
@@ -409,6 +423,53 @@ async function saveData() {
         } else {
             updateConnectionStatus();
         }
+
+async function fetchServerDataset() {
+    if (currentCloudConfig) {
+        return await fetchFromCloud();
+    } else if (useServer) {
+        try {
+            const res = await fetch(LOCAL_API_URL);
+            if (res.ok) {
+                return await res.json();
+            }
+        } catch (e) {
+            console.error("Local server fetch error", e);
+        }
+    }
+    return null;
+}
+
+async function syncFromServer(silent = false) {
+    const dataset = await fetchServerDataset();
+    if (dataset) {
+        data = dataset;
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+        if (!silent) {
+            alert(currentCloudConfig ? '已从云端服务器加载数据！' : '已从本地服务器加载数据！');
+        }
+        return true;
+    } else if (!silent) {
+        alert('未连接任何服务器或服务器无数据');
+    }
+    return false;
+}
+
+async function fetchServerDataset() {
+    if (currentCloudConfig) {
+        return await fetchFromCloud();
+    } else if (useServer) {
+        try {
+            const res = await fetch(LOCAL_API_URL);
+            if (res.ok) {
+                return await res.json();
+            }
+        } catch (e) {
+            console.error("Local server fetch error", e);
+        }
+    }
+    return null;
+}
     } else if (useServer) {
         try {
             await fetch(LOCAL_API_URL, {
@@ -910,15 +971,7 @@ function openRecoveryModal() {
     const serverInfoEl = document.getElementById('rec-server-info');
     serverInfoEl.textContent = '正在连接服务器...';
     
-    // Determine fetch source based on config
-    let fetchPromise;
-    if (currentCloudConfig) {
-        fetchPromise = fetchFromCloud().then(d => d); // Wrap to match structure if needed, but fetchFromCloud returns data directly
-    } else {
-        fetchPromise = fetch(LOCAL_API_URL).then(res => res.json());
-    }
-
-    fetchPromise.then(serverData => {
+    fetchServerDataset().then(serverData => {
         if (!serverData) throw new Error('No data');
         const count = serverData.tasks ? serverData.tasks.length : 0;
         serverInfoEl.textContent = `项目: ${serverData.project ? serverData.project.name : '未知'} | 任务数: ${count}`;
@@ -950,24 +1003,8 @@ async function restoreFrom(source) {
     
     try {
         if (source === 'server') {
-            // Use LOCAL_API_URL for local server fallback, or Cloud fetch
-            if (currentCloudConfig) {
-                const cloudData = await fetchFromCloud();
-                if (cloudData) {
-                    data = cloudData;
-                    alert('已从云端服务器加载数据！');
-                } else {
-                    throw new Error('云端没有数据或连接失败');
-                }
-            } else if (useServer) {
-                const res = await fetch(LOCAL_API_URL);
-                const serverData = await res.json();
-                data = serverData;
-                alert('已从本地服务器加载数据！');
-            } else {
-                alert('未连接任何服务器');
-                return;
-            }
+            const ok = await syncFromServer(false);
+            if (!ok) return;
         } else if (source === 'v3') {
             const raw = localStorage.getItem(STORAGE_KEY);
             if (raw) {
@@ -1327,13 +1364,13 @@ window.onclick = (e) => {
 document.addEventListener('DOMContentLoaded', async () => {
     await loadData();
     
-    // Double-check: if我们处于云端模式但当前数据仍是示例/空数据，再尝试一次云端拉取
-    if (currentCloudConfig && isDefaultDataset(data)) {
-        const cloudData = await fetchFromCloud();
-        if (cloudData) {
-            data = cloudData;
-            localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-        }
+    // 默认执行一次“数据恢复-服务器拉取”，确保首次打开即为云端数据
+    if (!initialServerSyncDone && (currentCloudConfig || useServer)) {
+        const ok = await syncFromServer(true);
+        if (ok) initialServerSyncDone = true;
+    } else if (currentCloudConfig && isDefaultDataset(data)) {
+        // 兜底逻辑：若仍是示例数据，再尝试一次云端拉取
+        await syncFromServer(true);
     }
     
     // Wire up Force Sync Button if connected
@@ -1389,7 +1426,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             // Temporarily use this config to test
             const oldConfig = currentCloudConfig;
-            currentCloudConfig = tempConfig;
+            currentCloudConfig = ensureCloudConfig(tempConfig);
             const data = await fetchFromCloud();
             
             if (data) {
@@ -1409,8 +1446,8 @@ document.addEventListener('DOMContentLoaded', async () => {
                 newConfig.url = document.getElementById('cloudCustomUrl').value.trim();
             }
 
-            currentCloudConfig = newConfig;
-            localStorage.setItem('cloud-config', JSON.stringify(newConfig));
+            currentCloudConfig = ensureCloudConfig(newConfig);
+            localStorage.setItem('cloud-config', JSON.stringify(currentCloudConfig));
             
             // Reload data with new config
             await loadData();

@@ -878,31 +878,16 @@ window.changeGanttMode = function(mode) {
 let editingTaskId = null;
 let editingModuleId = null;
 
-// Data Recovery / Debug
+// Force Sync button
 const controls = document.querySelector('.controls');
-
-// Add "Data Recovery" button
-const recoveryBtn = document.createElement('button');
-recoveryBtn.className = 'btn-secondary';
-recoveryBtn.innerHTML = '♻️ 找回数据';
-recoveryBtn.onclick = openRecoveryModal;
-controls.insertBefore(recoveryBtn, controls.firstChild); // Add to far left
-
-// Add Force Sync button (ensure it's added if not already)
-if (!document.getElementById('forceSyncBtn')) {
-    const syncBtn = document.createElement('button');
-    syncBtn.id = 'forceSyncBtn';
-    syncBtn.className = 'btn-secondary';
-    syncBtn.innerHTML = '☁️ 强制同步';
-    syncBtn.title = '将当前界面数据强制覆盖到服务器';
-    syncBtn.style.display = 'none'; // Hidden by default
-    syncBtn.onclick = async () => {
+const forceSyncBtn = document.getElementById('forceSyncBtn');
+if (forceSyncBtn && controls) {
+    forceSyncBtn.onclick = async () => {
         if(confirm('确定要将当前显示的数据覆盖服务器上的数据吗？\n\n注意：这会用您当前屏幕上看到的内容，替换掉服务器上所有人看到的内容。')) {
             await saveData();
             alert('同步完成！所有人都将看到您现在的数据。');
         }
     };
-    controls.insertBefore(syncBtn, controls.firstChild);
 }
 
 function openRecoveryModal() {
@@ -1027,10 +1012,13 @@ async function restoreFrom(source) {
 
 // Parent Management
 const parentModal = document.getElementById('parentModal');
-document.getElementById('manageParentsBtn').addEventListener('click', () => {
-    renderParentList();
-    parentModal.style.display = 'flex';
-});
+const manageParentsBtn = document.getElementById('manageParentsBtn');
+if (manageParentsBtn) {
+    manageParentsBtn.addEventListener('click', () => {
+        renderParentList();
+        parentModal.style.display = 'flex';
+    });
+}
 
 function renderParentList() {
     const list = document.getElementById('parentList');
@@ -1056,15 +1044,18 @@ function renderParentList() {
     });
 }
 
-document.getElementById('addParentBtn').addEventListener('click', () => {
-    const name = document.getElementById('newParentName').value.trim();
-    if (name) {
-        data.parentModules.push({ id: Date.now().toString(), name });
-        document.getElementById('newParentName').value = '';
-        saveData();
-        renderParentList();
-    }
-});
+const addParentBtn = document.getElementById('addParentBtn');
+if (addParentBtn) {
+    addParentBtn.addEventListener('click', () => {
+        const name = document.getElementById('newParentName').value.trim();
+        if (name) {
+            data.parentModules.push({ id: Date.now().toString(), name });
+            document.getElementById('newParentName').value = '';
+            saveData();
+            renderParentList();
+        }
+    });
+}
 
 function deleteParentModule(id) {
     if (confirm('确定删除此项目模块？其下的核心功能模块将被移除！')) {

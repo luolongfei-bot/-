@@ -413,7 +413,11 @@ async function saveData() {
         const ok = await saveToCloud(data);
         if (!ok) {
             const statusEl = document.getElementById('connectionStatus');
-            if (statusEl) statusEl.textContent = '⚠️ 云端同步失败';
+            if (statusEl) {
+                statusEl.textContent = '⚠️ 云端同步失败';
+                statusEl.style.backgroundColor = '#fff3cd';
+                statusEl.style.color = '#856404';
+            }
         } else {
             updateConnectionStatus();
         }
@@ -428,7 +432,11 @@ async function saveData() {
         } catch (e) {
             console.error("Failed to save to server", e);
             const statusEl = document.getElementById('connectionStatus');
-            if (statusEl) statusEl.textContent = '⚠️ 同步失败 (保存于本地)';
+            if (statusEl) {
+                statusEl.textContent = '⚠️ 同步失败 (保存于本地)';
+                statusEl.style.backgroundColor = '#fff3cd';
+                statusEl.style.color = '#856404';
+            }
         }
     }
     render();

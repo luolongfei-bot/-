@@ -1402,28 +1402,29 @@ document.addEventListener('DOMContentLoaded', async () => {
         const testCloudBtn = document.getElementById('testCloudBtn');
         if (testCloudBtn) {
             testCloudBtn.addEventListener('click', async () => {
-            const type = document.getElementById('cloudServiceType').value;
-            let tempConfig = { type };
-            
-            if (type === 'jsonbin') {
-                tempConfig.binId = document.getElementById('cloudBinId').value.trim();
-                tempConfig.apiKey = document.getElementById('cloudApiKey').value.trim();
-                if (!tempConfig.binId || !tempConfig.apiKey) return alert('请填写完整 JSONBin 信息');
-            } else {
-                tempConfig.url = document.getElementById('cloudCustomUrl').value.trim();
-                if (!tempConfig.url) return alert('请填写 API 地址');
-            }
+                const type = document.getElementById('cloudServiceType').value;
+                let tempConfig = { type };
+                
+                if (type === 'jsonbin') {
+                    tempConfig.binId = document.getElementById('cloudBinId').value.trim();
+                    tempConfig.apiKey = document.getElementById('cloudApiKey').value.trim();
+                    if (!tempConfig.binId || !tempConfig.apiKey) return alert('请填写完整 JSONBin 信息');
+                } else {
+                    tempConfig.url = document.getElementById('cloudCustomUrl').value.trim();
+                    if (!tempConfig.url) return alert('请填写 API 地址');
+                }
 
-            // Temporarily use this config to test
-            const oldConfig = currentCloudConfig;
-            currentCloudConfig = ensureCloudConfig(tempConfig);
-            const data = await fetchFromCloud();
-            
-            if (data) {
-                alert('✅ 连接成功！读取到 ' + (data.tasks ? data.tasks.length : 0) + ' 个任务。');
-            }
-            currentCloudConfig = oldConfig; // Revert
-        });
+                // Temporarily use this config to test
+                const oldConfig = currentCloudConfig;
+                currentCloudConfig = ensureCloudConfig(tempConfig);
+                const data = await fetchFromCloud();
+                
+                if (data) {
+                    alert('✅ 连接成功！读取到 ' + (data.tasks ? data.tasks.length : 0) + ' 个任务。');
+                }
+                currentCloudConfig = oldConfig; // Revert
+            });
+        }
 
         const saveCloudBtn = document.getElementById('saveCloudBtn');
         if (saveCloudBtn) {

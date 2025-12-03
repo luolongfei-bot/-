@@ -1397,7 +1397,9 @@ document.addEventListener('DOMContentLoaded', async () => {
             cloudModal.style.display = 'flex';
         });
 
-        document.getElementById('testCloudBtn').addEventListener('click', async () => {
+        const testCloudBtn = document.getElementById('testCloudBtn');
+        if (testCloudBtn) {
+            testCloudBtn.addEventListener('click', async () => {
             const type = document.getElementById('cloudServiceType').value;
             let tempConfig = { type };
             
@@ -1421,7 +1423,9 @@ document.addEventListener('DOMContentLoaded', async () => {
             currentCloudConfig = oldConfig; // Revert
         });
 
-        document.getElementById('saveCloudBtn').addEventListener('click', async () => {
+        const saveCloudBtn = document.getElementById('saveCloudBtn');
+        if (saveCloudBtn) {
+            saveCloudBtn.addEventListener('click', async () => {
             const type = document.getElementById('cloudServiceType').value;
             let newConfig = { type };
             
@@ -1441,7 +1445,8 @@ document.addEventListener('DOMContentLoaded', async () => {
             
             cloudModal.style.display = 'none';
             alert('已切换到云端模式！');
-        });
+            });
+        }
     }
 
     render();

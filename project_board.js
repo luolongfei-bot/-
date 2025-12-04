@@ -1217,13 +1217,16 @@ document.getElementById('exportBtn').addEventListener('click', () => {
 });
 
 // Edit Project Name
-document.getElementById('editProjectBtn').addEventListener('click', () => {
-    const newName = prompt("请输入新的项目名称：", data.project.name);
-    if (newName && newName.trim()) {
-        data.project.name = newName.trim();
-        saveData();
-    }
-});
+const editProjectBtn = document.getElementById('editProjectNameBtn');
+if (editProjectBtn) {
+    editProjectBtn.addEventListener('click', () => {
+        const newName = prompt("请输入新的项目名称：", data.project.name);
+        if (newName && newName.trim()) {
+            data.project.name = newName.trim();
+            saveData();
+        }
+    });
+}
 
 // Common Modal Close
 document.querySelectorAll('.close-modal').forEach(btn => {

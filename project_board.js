@@ -1,5 +1,3 @@
-const STORAGE_KEY = 'project-board-v3';
-
 // Sample Data Structure
 // Hierarchy: Project (Parent) Modules -> Core Functional Modules (Sub) -> Tasks
 const defaultData = {
@@ -239,6 +237,11 @@ function ensureCloudConfig(config) {
         merged.binId = DEFAULT_CLOUD_CONFIG.binId;
         merged.apiKey = DEFAULT_CLOUD_CONFIG.apiKey;
     }
+    if (merged.type === 'custom' && !merged.url) {
+        console.warn('自定义云端未填写 URL，已自动回退到 JSONBin');
+        merged.type = 'jsonbin';
+        delete merged.url;
+    }
     return merged;
 }
 
@@ -357,215 +360,71 @@ function updateConnectionStatus() {
 
 // --- Core Logic ---
 
+function normalizeDataset(dataset) {
+    if (!dataset || typeof dataset !== 'object') return null;
+    const normalized = {
+        project: dataset.project ? { ...dataset.project } : { name: '未命名项目' },
+        parentModules: Array.isArray(dataset.parentModules) ? [...dataset.parentModules] : [],
+        modules: Array.isArray(dataset.modules) ? [...dataset.modules] : [],
+        tasks: Array.isArray(dataset.tasks) ? [...dataset.tasks] : []
+    };
+
+    if (!normalized.project.name) normalized.project.name = '未命名项目';
+
+    if (normalized.modules.length > 0 && normalized.parentModules.length === 0) {
+        const fallbackParent = { id: 'pm_default', name: '默认项目模块' };
+        normalized.parentModules.push(fallbackParent);
+        normalized.modules = normalized.modules.map(m => ({
+            ...m,
+            parentId: m.parentId || fallbackParent.id
+        }));
+    }
+
+    return normalized;
+}
+
 async function loadData() {
     await checkServer();
-    
-    let serverData = null;
-    
-    // Try Cloud or Local Server
+
+    const fallbackToDefault = () => {
+        data = JSON.parse(JSON.stringify(defaultData));
+        console.warn('Cloud数据不可用，已回退到内置示例数据');
+    };
+
     if (currentCloudConfig) {
-        serverData = await fetchFromCloud();
-    } else if (useServer) {
+        const serverData = await fetchFromCloud();
+        const normalized = normalizeDataset(serverData);
+        if (normalized) {
+            data = normalized;
+            console.log('已从云端加载数据');
+            return;
+        }
+        fallbackToDefault();
+        return;
+    }
+
+    if (useServer) {
         try {
             const res = await fetch(LOCAL_API_URL);
-            if (res.ok) serverData = await res.json();
-        } catch(e) {}
-    }
-
-    let raw = localStorage.getItem(STORAGE_KEY);
-    
-    // --- NEW LOGIC: Prioritize Local Data if Server is "New/Default" ---
-    
-    // Check if local data exists and is "real" (not just a newly initialized default)
-    // We can assume if it has custom tasks or project name, it's real.
-    let localIsReal = false;
-    let localData = null;
-    if (raw) {
-        try {
-            localData = JSON.parse(raw);
-            if (localData.tasks && localData.tasks.length > 0) localIsReal = true;
-            if (localData.project && localData.project.name !== "演示大事件" && localData.project.name !== "未命名项目") localIsReal = true;
-        } catch(e) {}
-    }
-
-    // Check if server data is effectively "empty/default"
-    // The Python server initializes with "未命名项目" and empty tasks.
-    const isServerDefault = serverData && 
-                            !currentCloudConfig && // 仅针对本地服务器判断默认数据
-                            serverData.project.name === "未命名项目" && 
-                            (!serverData.tasks || serverData.tasks.length === 0);
-
-    if (currentCloudConfig) {
-        if (serverData) {
-            data = serverData;
-            console.log("Loaded data from Cloud");
-            localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-            return;
-        } else {
-            console.warn("Cloud data unavailable, fallback to local cache if exists.");
-            if (localData) {
-                data = localData;
-                return;
-            }
-        }
-    } else if (useServer && serverData && !isServerDefault) {
-        // Local server has data -> use it
-        data = serverData;
-        console.log("Loaded data from Server");
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-        return;
-    } else if (useServer && localIsReal) {
-        // Local server empty/default, push cached data
-        data = localData;
-        console.log("Loaded local data, pushing to local server...");
-        saveData();
-        return;
-    }
-
-    // Fallback to Local Storage if server didn't provide better data
-    // Check if current data is just the default sample
-    let isSample = false;
-    if (raw) {
-        try {
-            const current = JSON.parse(raw);
-            // Heuristic: if name matches and task count matches sample
-            if (current.project && current.project.name === "演示大事件" && 
-                current.tasks && current.tasks.length === 3 && current.tasks[0].id === 't1') {
-                isSample = true;
-            }
-        } catch(e) {}
-    }
-
-    // Migration Logic: Check for V2 or V1 data if V3 is empty or sample
-    if (!raw || isSample) {
-        // Try V2
-        const v2Raw = localStorage.getItem('project-board-v2');
-        if (v2Raw) {
-            try {
-                console.log("Migrating data from v2 to v3...");
-                const v2Data = JSON.parse(v2Raw);
-                migrateV2ToV3(v2Data);
-                return;
-            } catch (e) {
-                console.error("Migration v2 failed", e);
-            }
-        }
-
-        // Try V1
-        const v1Raw = localStorage.getItem('project-board-v1');
-        if (v1Raw) {
-             try {
-                console.log("Migrating data from v1 to v3...");
-                const v1Data = JSON.parse(v1Raw);
-                migrateV1ToV3(v1Data);
-                return;
-            } catch (e) {
-                console.error("Migration v1 failed", e);
-            }
-        }
-    }
-
-    if (raw) {
-        try {
-            data = JSON.parse(raw);
-            if (!data.project) data.project = { name: 'Project Flow' };
-            if (!data.parentModules) data.parentModules = [];
-            if (!data.modules) data.modules = [];
-            if (!data.tasks) data.tasks = [];
-            
-            // Integrity: Assign orphaned modules to a default parent
-            if (data.modules.length > 0 && data.parentModules.length === 0) {
-                const defaultParent = { id: 'pm_default', name: '默认项目模块' };
-                data.parentModules.push(defaultParent);
-                data.modules.forEach(m => {
-                    if (!m.parentId) m.parentId = 'pm_default';
-                });
+            if (res.ok) {
+                const dataset = await res.json();
+                const normalized = normalizeDataset(dataset);
+                if (normalized) {
+                    data = normalized;
+                    console.log('已从局域网服务器加载数据');
+                    return;
+                }
             }
         } catch (e) {
-            console.error('Failed to parse data', e);
+            console.error('局域网服务器不可用', e);
         }
     }
+
+    fallbackToDefault();
 }
 
-function migrateV2ToV3(v2Data) {
-    if (!v2Data.parentModules) {
-        v2Data.parentModules = [
-            { id: 'pm_default', name: '默认项目模块' }
-        ];
-    }
-    if (v2Data.modules) {
-        v2Data.modules.forEach(m => {
-            if (!m.parentId) m.parentId = 'pm_default';
-        });
-    }
-    data = v2Data;
-    if (!data.tasks) data.tasks = [];
-    saveData();
-    alert("已成功恢复并迁移 V2 版本数据！");
-}
-
-function migrateV1ToV3(v1Data) {
-    // V1 Structure: { modules: [], stages: [], tasks: [] }
-    // Strategy: Stages -> V3 Modules (Columns).
-    
-    const newParent = { id: 'pm_rec', name: '恢复的旧版数据' };
-    const newModules = [];
-    
-    // Map V1 Stages to V3 Modules
-    if (v1Data.stages) {
-        v1Data.stages.forEach(s => {
-            newModules.push({
-                id: s.id, // Keep ID to map tasks
-                parentId: 'pm_rec',
-                name: s.name,
-                startDate: s.date || '',
-                endDate: '',
-                color: '#5bc17f'
-            });
-        });
-    }
-
-    // Map V1 Tasks
-    // V1 Task: { id, content, stageId, moduleId, ... }
-    // V3 Task: { id, content, moduleId (was stageId), ... }
-    const newTasks = [];
-    if (v1Data.tasks) {
-        v1Data.tasks.forEach(t => {
-            // Prepend old module tag to content if exists
-            let content = t.content;
-            if (t.moduleId && v1Data.modules) {
-                const oldMod = v1Data.modules.find(m => m.id === t.moduleId);
-                if (oldMod) content = `[${oldMod.name}] ${content}`;
-            }
-
-            newTasks.push({
-                id: t.id,
-                content: content,
-                moduleId: t.stageId, // Map to new module (old stage)
-                status: t.status || 'pending',
-                startDate: t.startDate || '',
-                endDate: t.endDate || '',
-                duration: t.duration || 1,
-                dependencies: t.dependencies || []
-            });
-        });
-    }
-
-    data = {
-        project: { name: '恢复的项目' },
-        parentModules: [newParent],
-        modules: newModules,
-        tasks: newTasks
-    };
-    
-    saveData();
-    alert("已成功恢复并迁移 V1 版本数据！");
-}
 
 async function saveData() {
-    // Always save to local storage as backup/cache
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-    
     if (currentCloudConfig) {
         const ok = await saveToCloud(data);
         if (!ok) {
@@ -590,7 +449,7 @@ async function saveData() {
             console.error("Failed to save to server", e);
             const statusEl = document.getElementById('connectionStatus');
             if (statusEl) {
-                statusEl.textContent = '⚠️ 同步失败 (保存于本地)';
+                statusEl.textContent = '⚠️ 局域网同步失败';
                 statusEl.style.backgroundColor = '#fff3cd';
                 statusEl.style.color = '#856404';
             }
@@ -617,9 +476,9 @@ async function fetchServerDataset() {
 
 async function syncFromServer(silent = false) {
     const dataset = await fetchServerDataset();
-    if (dataset) {
-        data = dataset;
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+    const normalized = normalizeDataset(dataset);
+    if (normalized) {
+        data = normalized;
         if (!silent) {
             alert(currentCloudConfig ? '已从云端服务器加载数据！' : '已从本地服务器加载数据！');
         }
@@ -1047,125 +906,8 @@ if (forceSyncBtn && controls) {
     };
 }
 
-function openRecoveryModal() {
-    // Create modal on the fly
-    let modal = document.getElementById('recoveryModal');
-    if (!modal) {
-        modal = document.createElement('div');
-        modal.id = 'recoveryModal';
-        modal.className = 'modal-overlay';
-        modal.innerHTML = `
-            <div class="modal-content" style="max-width: 600px;">
-                <div class="modal-header">
-                    <h2>♻️ 数据恢复与同步</h2>
-                    <button class="close-modal icon-btn" onclick="document.getElementById('recoveryModal').style.display='none'">×</button>
-                </div>
-                <div class="modal-body">
-                    <p style="color:#666;margin-bottom:15px;">如果您发现数据丢失，可以在这里尝试从本地缓存或旧版本中找回。</p>
-                    
-                    <div style="border:1px solid #eee; padding:10px; margin-bottom:10px; border-radius:4px;">
-                        <h3 style="margin:0 0 10px 0;font-size:1rem;">1. 本地缓存 (V3 - 最新)</h3>
-                        <div id="rec-v3-info" style="font-size:0.9rem; color:#444; margin-bottom:5px;">正在检查...</div>
-                        <button id="btn-load-v3" class="btn-primary" style="font-size:0.8rem;">从本地缓存加载</button>
-                    </div>
 
-                    <div style="border:1px solid #eee; padding:10px; margin-bottom:10px; border-radius:4px;">
-                        <h3 style="margin:0 0 10px 0;font-size:1rem;">2. 本地旧版 (V2 - 历史)</h3>
-                        <div id="rec-v2-info" style="font-size:0.9rem; color:#444; margin-bottom:5px;">正在检查...</div>
-                        <button id="btn-load-v2" class="btn-secondary" style="font-size:0.8rem;">从 V2 恢复</button>
-                    </div>
-                    
-                     <div style="border:1px solid #eee; padding:10px; margin-bottom:10px; border-radius:4px;">
-                        <h3 style="margin:0 0 10px 0;font-size:1rem;">3. 服务器数据 (云端)</h3>
-                        <div id="rec-server-info" style="font-size:0.9rem; color:#444; margin-bottom:5px;">正在检查...</div>
-                        <button id="btn-load-server" class="btn-secondary" style="font-size:0.8rem;">从服务器拉取</button>
-                    </div>
-                </div>
-            </div>
-        `;
-        document.body.appendChild(modal);
-        
-        // Bind events
-        modal.querySelector('#btn-load-v3').onclick = () => restoreFrom('v3');
-        modal.querySelector('#btn-load-v2').onclick = () => restoreFrom('v2');
-        modal.querySelector('#btn-load-server').onclick = () => restoreFrom('server');
-    }
-    
-    // Check Data Status
-    const v3Raw = localStorage.getItem(STORAGE_KEY);
-    const v2Raw = localStorage.getItem('project-board-v2');
-    
-    updateRecInfo('rec-v3-info', v3Raw);
-    updateRecInfo('rec-v2-info', v2Raw);
-    
-    const serverInfoEl = document.getElementById('rec-server-info');
-    serverInfoEl.textContent = '正在连接服务器...';
-    
-    fetchServerDataset().then(serverData => {
-        if (!serverData) throw new Error('No data');
-        const count = serverData.tasks ? serverData.tasks.length : 0;
-        serverInfoEl.textContent = `项目: ${serverData.project ? serverData.project.name : '未知'} | 任务数: ${count}`;
-    }).catch(() => {
-        serverInfoEl.textContent = '无法连接服务器';
-    });
 
-    modal.style.display = 'flex';
-}
-
-function updateRecInfo(id, raw) {
-    const el = document.getElementById(id);
-    if (!raw) {
-        el.textContent = '无数据';
-        return;
-    }
-    try {
-        const d = JSON.parse(raw);
-        const name = d.project ? d.project.name : 'Unknown';
-        const tasks = d.tasks ? d.tasks.length : 0;
-        el.textContent = `项目: ${name} | 任务数: ${tasks}`;
-    } catch(e) {
-        el.textContent = '数据损坏';
-    }
-}
-
-async function restoreFrom(source) {
-    if (!confirm('确定要加载这份数据吗？当前界面未保存的修改将丢失。')) return;
-    
-    try {
-        if (source === 'server') {
-            const ok = await syncFromServer(false);
-            if (!ok) return;
-        } else if (source === 'v3') {
-            const raw = localStorage.getItem(STORAGE_KEY);
-            if (raw) {
-                data = JSON.parse(raw);
-                alert('已从本地缓存(V3)加载数据！');
-            } else {
-                alert('本地没有 V3 数据');
-                return;
-            }
-        } else if (source === 'v2') {
-             const raw = localStorage.getItem('project-board-v2');
-            if (raw) {
-                const v2Data = JSON.parse(raw);
-                migrateV2ToV3(v2Data); // This function handles data assignment and alert
-                document.getElementById('recoveryModal').style.display = 'none';
-                render();
-                return;
-            } else {
-                alert('本地没有 V2 数据');
-                return;
-            }
-        }
-        
-        saveData(); // Save to persist this choice (syncs to server if connected)
-        document.getElementById('recoveryModal').style.display = 'none';
-        render();
-        
-    } catch(e) {
-        alert('加载失败: ' + e.message);
-    }
-}
 
 // Parent Management
 const parentModal = document.getElementById('parentModal');
